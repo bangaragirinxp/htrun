@@ -32,7 +32,7 @@ class Mbed:
     @details This class stores information about things like disk, port, serial speed etc.
              Class is also responsible for manipulation of serial port between host and mbed device
     """
-    def __init__(self, options):
+    def __init__(self, options=None):
         """ ctor
         """
         # For compatibility with old mbed. We can use command line options for Mbed object
@@ -43,6 +43,9 @@ class Mbed:
 
         self.DEFAULT_RESET_TOUT = 0
 
+        if self.options and self.options.port is None:
+            raise Exception("The serial port (see: -p PORT) of the target mbed have to be provided as command line arguments")
+
         # Options related to copy / reset mbed device
         self.port = self.options.port
         self.disk = self.options.disk
@@ -52,12 +55,12 @@ class Mbed:
 
         # Serial port settings
         self.serial = None
-        self.serial_baud = 115200
+        self.serial_baud = 9600
         self.serial_timeout = 1
 
-        # Users can use command to pass port speeds together with port name. E.g. COM4:115200:1
+        # Users can use command to pass port speeds together with port name. E.g. COM4:9600:1
         # Format if PORT:SPEED:TIMEOUT
-        port_config = self.port.split(':') if self.port else ''
+        port_config = self.port.split(':')
         if len(port_config) == 2:
             # -p COM4:115200
             self.port = port_config[0]
@@ -83,9 +86,9 @@ class Mbed:
                 print "MBED: Test configuration JSON Unexpected error:"
                 raise
 
-        print 'HOST: Instrumentation: "%s" and disk: "%s"' % (self.port, self.disk)
+        print 'MBED: Instrumentation: "%s" and disk: "%s"' % (self.port, self.disk)
 
-    def init_serial_params(self, serial_baud=115200, serial_timeout=1):
+    def init_serial_params(self, serial_baud=9600, serial_timeout=1):
         """! Initialize port parameters.
 
         @param serial_baud Serial port default speed
@@ -251,12 +254,9 @@ class Mbed:
         # Flush serials to get only input after reset
         self.flush()
         if self.options.forced_reset_type:
-            reset_method = self.options.forced_reset_type
+            result = ht_plugins.call_plugin('ResetMethod', self.options.forced_reset_type, disk=self.disk, serial=self.serial)
         else:
-            reset_method = 'default'
-        result = ht_plugins.call_plugin('ResetMethod', reset_method,
-                                        serial=self.serial, disk=self.disk,
-                                        image_path=self.image_path)
+            result = ht_plugins.call_plugin('ResetMethod', 'default', serial=self.serial)
         # Give time to wait for the image loading
         reset_tout_s = self.options.forced_reset_timeout if self.options.forced_reset_timeout is not None else self.DEFAULT_RESET_TOUT
         self.reset_timeout(reset_tout_s)
@@ -297,7 +297,7 @@ class Mbed:
                 copy_method = 'shell'
         else:
             copy_method = 'shell'
-        result = ht_plugins.call_plugin('CopyMethod',
+        result = ht_plugins.call_plugin('CopyMethod', 
                                         copy_method,
                                         image_path=image_path,
                                         serial=port,

@@ -18,6 +18,7 @@ Author: Przemyslaw Wirkus <Przemyslaw.Wirkus@arm.com>
 """
 
 import os
+import jnprog
 from host_test_plugins import HostTestPluginBase
 
 
@@ -53,32 +54,56 @@ class HostTestPluginCopyMethod_JN51xx(HostTestPluginBase):
         @param capability Capability name
         @param args Additional arguments
         @param kwargs Additional arguments
+
         @details Each capability e.g. may directly just call some command line program or execute building pythonic function
+
         @return Capability call return value
         """
-        if not kwargs['image_path']:
-            self.print_plugin_error("Error: image path not specified")
-            return False
-
-        if not kwargs['serial']:
-            self.print_plugin_error("Error: serial port not set (not opened?)")
-            return False
-
         result = False
-        if self.check_parameters(capability, *args, **kwargs):
-            if kwargs['image_path'] and kwargs['serial']:
-                image_path = os.path.normpath(kwargs['image_path'])
-                serial_port = kwargs['serial']
-                if capability == 'jn51xx':
-                    # Example:
-                    # JN51xxProgrammer.exe -s COM15 -f <file> -V0
-                    cmd = [self.JN51XX_PROGRAMMER,
-                           '-s', serial_port,
-                           '-f', image_path,
-                           '-V0'
-                          ]
-                    result = self.run_command(cmd)
-        return result
+        if self.check_parameters(capability, *args, **kwargs) is True:
+            image_path = os.path.normpath(kwargs['image_path'])
+            serial_port = kwargs['serial']
+            if capability == 'jn51xx':
+                # Example:
+                # JN51xxProgrammer.exe -s COM15 -f <file> -V0
+                # cmd = [self.JN51XX_PROGRAMMER,
+                       # '-s', serial_port,
+                       # '-f', image_path,
+                       # '-V0'
+                      # ]
+                # result = self.run_command(cmd)
+                # print "My Programing"
+                ctx = jnprog.Programmer()
+
+                # Open connection at the bootloader default of 38400
+                conn = jnprog.Connection(serial_port, jnprog.CONNECT_SERIAL)
+                conn.details.serial.baud_rate = 38400
+                ctx.connection_open(conn)
+
+                # Retrieve the chip details
+                ctx.chip_get_details()
+                
+                # Up the baudrate to 1M once connected
+                conn.details.serial.baud_rate = 1000000;
+                ctx.connection_update(conn)
+                    
+                # Load the received image data
+                ctx.firmware_open(image_path)
+
+                # print ctx.chip_details.chip_name
+                
+                #print "Programming device...",
+                # Program the image
+                ctx.flash_program()
+
+                # Erase the eeprom
+                ctx.eeprom_erase(jnprog.ERASE_EEPROM_ALL)
+                
+                # Close the connection without resetting the device
+                ctx.flags.auto_program_reset = False;
+                ctx.connection_close()
+
+        return True
 
 
 def load_plugin():
